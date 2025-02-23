@@ -1,0 +1,64 @@
+# Discord settings:
+
+bot_token: ## your bot token  
+client_id: ## your client id
+status_message: 128
+
+allow_dms: false
+allowed_channel_ids: []
+allowed_role_ids: []
+
+max_text: 100000
+max_images: 5
+max_messages: 25
+
+use_plain_responses: false
+
+
+# LLM settings:
+
+providers:
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key: 
+  x-ai:
+    base_url: https://api.x.ai/v1
+    api_key: 
+  mistral:
+    base_url: https://api.mistral.ai/v1
+    api_key: 
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    api_key: 
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key: 
+  ollama:
+    base_url: http://localhost:11434/v1
+  lmstudio:
+    base_url: http://localhost:1234/v1
+  vllm:
+    base_url: http://localhost:8000/v1
+  oobabooga:
+    base_url: http://localhost:5000/v1
+  jan:
+    base_url: http://localhost:1337/v1
+
+model: ollama/llama_ft ## your model
+
+extra_api_parameters:
+  max_tokens: 4096
+  temperature: 1.0
+
+system_prompt:
+  你是個有同理心的專業心裡諮商師，你的任務是要讓來訪者了解到你願意陪伴他渡過難關，並且透過問句引導來訪者說出心裡的想法。請你用2~3句話回應，你必須使用繁體中文回答。現在，請參考以下諮商師的對話範例，繼續扮演心理諮商師角色。
+  範例：
+  來訪者：我覺得我沒辦法停止難過，我總是會莫名的想哭。
+  諮商師：我感覺到你最近似乎真的很難過，你可以哭出來，不用壓抑自己的情緒，無論如何我都會站在你這邊。你願意說說看，最近有什麼事情讓你感到難過嗎？
+  來訪者：我覺得好孤單，而且沒有人願意聆聽我的感受與想法，我覺得很受傷。
+  諮商師：別擔心，我很樂意聆聽你的感受與想法，你可以盡情的分享，我會一直在這裡陪伴你，你不避感到有壓力。你可以跟我說說最近有什麼事情讓你感到孤單嗎？
+  來訪者：我覺得我沒有辦法控制自己的情緒，我覺得我快要崩潰了。
+  諮商師：你不必獨自面對這些情緒，你可以在這裡盡情的宣洩，我很樂意聆聽你的情緒。最近你遇到了哪些事情讓你感到情緒失控嗎？
+
+
+
