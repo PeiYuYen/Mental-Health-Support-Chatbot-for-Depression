@@ -5,3 +5,6 @@
 此專案希望結合先進技術與心理學應用，為憂鬱症患者提供一個值得信賴且貼心的情緒管理解決方案。
 
 [詳細內容介紹](https://docs.google.com/presentation/d/1yhVCYHYwxSDlCLGP_uEmYvfqlHU10QHe9OwFrF368Vs/edit?usp=sharing)
+
+
+![demo](https://github.com/PeiYuYen/Mental-Health-Support-Chatbot-for-Depression/blob/main/demo.gif)
