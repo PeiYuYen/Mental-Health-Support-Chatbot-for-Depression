@@ -8,3 +8,15 @@
 
 
 ![demo](https://github.com/PeiYuYen/Mental-Health-Support-Chatbot-for-Depression/blob/main/demo.gif)
+
+### Instructions
+1. DC chatbot
+   complete config.yaml
+   & run
+   ```bash
+   python llmcord.py
+   ```
+2. streamlit
+   ```bash
+   streamlit run chat_v2.py
+   ```
