@@ -1,0 +1,14 @@
+discord.py
+httpx
+openai
+pyyaml
+streamlit
+streamlit-chat
+pandas
+numpy
+matplotlib
+plotly
+OpenCC
+transformers
+torch
+langchain_ollama
