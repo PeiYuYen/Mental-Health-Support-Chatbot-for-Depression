@@ -8,7 +8,8 @@ import plotly.express as px
 import re
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection
+from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection, translate_text
+from googletrans import Translator
 
 DB_FILE = 'user_db.json'
 if not os.path.exists(DB_FILE):
@@ -127,11 +128,12 @@ def main():
         user_id = st.session_state.get("username")
         st.subheader("📝 我的情緒日記分析")
         diary_text = st.text_area("請輸入你今天的心情與事件...", height=200)
+        context = translate_text(diary_text)  # 使用翻譯函數處理輸入
 
         if st.button("分析我的情緒"):
             if diary_text.strip():
                 with st.spinner("分析中..."):
-                    emotions = analyze_emotions(diary_text)
+                    emotions = analyze_emotions(context)
                     print("日記內容：", diary_text)
                     print("使用者 ID：", user_id)
                     print("情緒分析結果：", emotions)
