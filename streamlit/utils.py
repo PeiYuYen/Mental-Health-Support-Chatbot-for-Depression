@@ -10,11 +10,21 @@ import sqlite3
 import json
 import re
 from datetime import datetime
+from transformers import T5ForConditionalGeneration, T5Tokenizer
+from opencc import OpenCC
+cc = OpenCC('t2s')
+device = 'cuda'
 
-# 初始化 LLM
+# emotional LLM
 MODEL_PATH = 'lzw1008/Emollama-chat-7b'
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 emo_model = AutoModelForCausalLM.from_pretrained(MODEL_PATH, device_map='auto')
+# translation model
+model_name = 'utrobinmv/t5_translate_en_ru_zh_small_1024'
+model = T5ForConditionalGeneration.from_pretrained(model_name)
+model.to(device)
+tokenizer_transtor = T5Tokenizer.from_pretrained(model_name)
+
 
 # 改良版情緒分析函式（分類 + 強度）
 def analyze_emotions(text: str) -> dict:
@@ -40,7 +50,12 @@ Assistant:"""
         "anger", "anticipation", "disgust", "fear", "joy", "love",
         "optimism", "pessimism", "sadness", "surprise", "trust"
     }
-
+    def normalize_scores(scores: dict) -> dict:
+        total = sum(scores.values())
+        if total == 0:
+            return scores
+        return {k: v / total for k, v in scores.items()}
+    
     try:
         after_assistant = response.split("Assistant:")[-1]
 
@@ -67,7 +82,7 @@ Assistant:"""
             if emotion.lower() in emotion_labels
         }
 
-        return fallback_emotions if fallback_emotions else {}
+        return normalize_scores(fallback_emotions) if fallback_emotions else {}
 
     except Exception as e:
         print("❌ 解析失敗：", e)
@@ -113,3 +128,16 @@ def generate_suggestion(dominant_emotion: str) -> str:
         "trust": "你展現了信任的情緒，也許可以更多與他人合作與連結。"
     }
     return suggestions.get(dominant_emotion, "建議多關注自己的內在感受，給自己一些溫柔的空間。")
+
+def translate_text(text):
+    converted = cc.convert(text)
+    prefix = 'translate to en: '
+    src_text = prefix + converted
+
+    # translate Russian to Chinese
+    input_ids = tokenizer_transtor(src_text, return_tensors="pt")
+
+    generated_tokens = model.generate(**input_ids.to(device))
+
+    result = tokenizer_transtor.batch_decode(generated_tokens, skip_special_tokens=True)
+    return result[0]
