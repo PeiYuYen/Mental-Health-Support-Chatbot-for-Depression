@@ -9,7 +9,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection, translate_text
-from googletrans import Translator
+
 
 DB_FILE = 'user_db.json'
 if not os.path.exists(DB_FILE):
