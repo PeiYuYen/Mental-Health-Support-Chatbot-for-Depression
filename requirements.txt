@@ -4,6 +4,8 @@ openai
 pyyaml
 streamlit
 streamlit-chat
+streamlit-chat-widget
+streamlit-extras
 pandas
 numpy
 matplotlib
@@ -12,3 +14,4 @@ OpenCC
 transformers
 torch
 langchain_ollama
+whisper
