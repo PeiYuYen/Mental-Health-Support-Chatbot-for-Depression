@@ -3,6 +3,9 @@ from datetime import datetime
 import pandas as pd
 import sqlite3
 import plotly.express as px
+import whisper
+import tempfile
+import os
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
@@ -10,21 +13,11 @@ import sqlite3
 import json
 import re
 from datetime import datetime
-from transformers import T5ForConditionalGeneration, T5Tokenizer
-from opencc import OpenCC
-cc = OpenCC('t2s')
-device = 'cuda'
 
-# emotional LLM
+# 初始化 LLM
 MODEL_PATH = 'lzw1008/Emollama-chat-7b'
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-emo_model = AutoModelForCausalLM.from_pretrained(MODEL_PATH, device_map='auto')
-# translation model
-model_name = 'utrobinmv/t5_translate_en_ru_zh_small_1024'
-model = T5ForConditionalGeneration.from_pretrained(model_name)
-model.to(device)
-tokenizer_transtor = T5Tokenizer.from_pretrained(model_name)
-
+emo_model = AutoModelForCausalLM.from_pretrained(MODEL_PATH, device_map='auto',offload_folder="offload")
 
 # 改良版情緒分析函式（分類 + 強度）
 def analyze_emotions(text: str) -> dict:
@@ -50,12 +43,7 @@ Assistant:"""
         "anger", "anticipation", "disgust", "fear", "joy", "love",
         "optimism", "pessimism", "sadness", "surprise", "trust"
     }
-    def normalize_scores(scores: dict) -> dict:
-        total = sum(scores.values())
-        if total == 0:
-            return scores
-        return {k: v / total for k, v in scores.items()}
-    
+
     try:
         after_assistant = response.split("Assistant:")[-1]
 
@@ -82,7 +70,7 @@ Assistant:"""
             if emotion.lower() in emotion_labels
         }
 
-        return normalize_scores(fallback_emotions) if fallback_emotions else {}
+        return fallback_emotions if fallback_emotions else {}
 
     except Exception as e:
         print("❌ 解析失敗：", e)
@@ -129,15 +117,29 @@ def generate_suggestion(dominant_emotion: str) -> str:
     }
     return suggestions.get(dominant_emotion, "建議多關注自己的內在感受，給自己一些溫柔的空間。")
 
-def translate_text(text):
-    converted = cc.convert(text)
-    prefix = 'translate to en: '
-    src_text = prefix + converted
+# 新增音訊轉文字功能
+@st.cache_resource
+def load_whisper_model(model_size: str = "base") -> whisper.Whisper:
+    """載入 Whisper 模型（使用 cache 避免重複載入）"""
+    return whisper.load_model(model_size)
 
-    # translate Russian to Chinese
-    input_ids = tokenizer_transtor(src_text, return_tensors="pt")
-
-    generated_tokens = model.generate(**input_ids.to(device))
-
-    result = tokenizer_transtor.batch_decode(generated_tokens, skip_special_tokens=True)
-    return result[0]
+def transcribe_audio(audio_bytes: bytes) -> str:
+    """將音訊位元組轉換為文字"""
+    try:
+        # 創建暫存檔案
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_audio:
+            tmp_audio.write(audio_bytes)
+            tmp_audio_path = tmp_audio.name
+        
+        # 載入模型並轉錄
+        model = load_whisper_model("medium")
+        result = model.transcribe(tmp_audio_path, language="zh")
+        
+        # 清理暫存檔案
+        os.remove(tmp_audio_path)
+        
+        return result["text"].strip()
+    
+    except Exception as e:
+        st.error(f"音訊轉錄失敗: {e}")
+        return ""
