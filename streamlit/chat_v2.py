@@ -8,8 +8,11 @@ import plotly.express as px
 import re
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection, translate_text
+from streamlit_chat_widget import chat_input_widget
+from streamlit_extras.bottom_container import bottom
+from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection, transcribe_audio
 
+# os.environ["STREAMLIT_WATCHER_IGNORE_FILES"] = "torch"
 
 DB_FILE = 'user_db.json'
 if not os.path.exists(DB_FILE):
@@ -25,7 +28,7 @@ def save_db():
         json.dump(db, file)
 
 # Loading the model of your choice
-llm = OllamaLLM(model='llama8b_ft')
+llm = OllamaLLM(model='llama3.2:3b')
 
 def main():
     st.title("🥰 Mental Health Support Chatbot")
@@ -48,6 +51,14 @@ def main():
 
     if page == "💬 Chat Support Mode":
         st.subheader("💬 聊天輔導支持")
+
+        # Inject CSS to control iframe height for chat_input_widget
+        st.markdown("""<style>
+iframe[title="streamlit_chat_widget.chat_input_widget"] {
+    height: 80px !important; /* You can adjust this value */
+}
+</style>""", unsafe_allow_html=True)
+
         # Function for handling conversation with history
         def conversational_chat(query):
             messages = [
@@ -88,26 +99,45 @@ def main():
 
         # **處理等待中的 AI 回應**
         if st.session_state['waiting_for_response']:
-            user_input = st.session_state['waiting_for_response']
+            user_input_text = st.session_state['waiting_for_response']
             
             # **找到最後一筆 "⏳ ..." 並更新**
             for i in range(len(st.session_state['history']) - 1, -1, -1):
                 if st.session_state['history'][i]["content"] == "⏳ ...":
-                    response = conversational_chat(user_input)  # 取得 LLM 回應
+                    response = conversational_chat(user_input_text)  # 取得 LLM 回應
                     st.session_state['history'][i] = {"role": "assistant", "type": "text", "content": response}  # **直接替換 bot 的回應**
                     st.session_state['waiting_for_response'] = None  # 清除等待狀態
                     st.rerun()  # 🔄 重新渲染頁面，讓 AI 回應顯示
                     break
 
-        # **聊天輸入框**
-        user_input = st.chat_input(f"說點什麼吧...")
+        # **新的音訊/文字輸入框**
+        with bottom():
+            user_input = chat_input_widget()
 
         if user_input:
             if st.session_state['waiting_for_response'] is None:  # 只有在沒有等待中的回應時才加入新訊息
-                st.session_state['history'].append({"role": "user", "type": "text", "content": user_input})  # 顯示使用者輸入
-                st.session_state['history'].append({"role": "assistant", "type": "text", "content": "⏳ ..."})  # 顯示等待中的訊息
-                st.session_state['waiting_for_response'] = user_input  # 標記等待 AI 回應
-                st.rerun()  # 立即更新畫面，讓使用者輸入先顯示
+                input_text = ""
+                
+                # 處理文字輸入
+                if "text" in user_input:
+                    input_text = user_input["text"]
+                    st.session_state['history'].append({"role": "user", "type": "text", "content": input_text})
+                
+                # 處理音訊輸入
+                elif "audioFile" in user_input:
+                    with st.spinner("🎤 正在轉錄音訊..."):
+                        audio_bytes = bytes(user_input["audioFile"])
+                        input_text = transcribe_audio(audio_bytes)
+                        if input_text:
+                            st.session_state['history'].append({"role": "user", "type": "text", "content": f"{input_text}"})
+                        else:
+                            st.error("音訊轉錄失敗，請重新嘗試")
+                            return
+                
+                if input_text:
+                    st.session_state['history'].append({"role": "assistant", "type": "text", "content": "⏳ ..."})  # 顯示等待中的訊息
+                    st.session_state['waiting_for_response'] = input_text  # 標記等待 AI 回應
+                    st.rerun()  # 立即更新畫面，讓使用者輸入先顯示
 
         # **滾動到底部標記**
         st.markdown("<div id='scroll-bottom'></div>", unsafe_allow_html=True)
@@ -127,13 +157,29 @@ def main():
 
         user_id = st.session_state.get("username")
         st.subheader("📝 我的情緒日記分析")
+        
+        # 文字輸入區域
         diary_text = st.text_area("請輸入你今天的心情與事件...", height=200)
-        context = translate_text(diary_text)  # 使用翻譯函數處理輸入
+        
+        # 音訊輸入區域
+        st.write("**或者用語音分享你的心情：**")
+        audio_input = st.audio_input("🎤 錄製語音日記")
+        
+        # 處理音訊輸入
+        if audio_input and not diary_text.strip():
+            with st.spinner("正在轉錄語音日記..."):
+                audio_bytes = audio_input.getvalue()
+                transcribed_text = transcribe_audio(audio_bytes)
+                if transcribed_text:
+                    diary_text = transcribed_text
+                    st.success(f"語音轉錄完成: {transcribed_text}")
+                else:
+                    st.error("語音轉錄失敗，請重新錄製")
 
         if st.button("分析我的情緒"):
             if diary_text.strip():
                 with st.spinner("分析中..."):
-                    emotions = analyze_emotions(context)
+                    emotions = analyze_emotions(diary_text)
                     print("日記內容：", diary_text)
                     print("使用者 ID：", user_id)
                     print("情緒分析結果：", emotions)
@@ -155,7 +201,7 @@ def main():
                     st.session_state.last_suggestion = generate_suggestion(dominant)
 
             else:
-                st.warning("請輸入日記內容才能分析喔。")
+                st.warning("請輸入日記內容或錄製語音才能分析喔。")
             
         # 顯示之前的分析結果（如果有的話）
         if st.session_state.last_analysis:
