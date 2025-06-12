@@ -120,8 +120,28 @@ def generate_suggestion(dominant_emotion: str) -> str:
 # 新增音訊轉文字功能
 @st.cache_resource
 def load_whisper_model(model_size: str = "base") -> whisper.Whisper:
-    """載入 Whisper 模型（使用 cache 避免重複載入）"""
-    return whisper.load_model(model_size)
+    """載入 Whisper 模型（使用 cache 避免重複載入）, 嘗試 GPU, 若 VRAM 不足或 GPU 不可用則使用 CPU"""
+    if torch.cuda.is_available():
+        try:
+            print(f"Attempting to load Whisper model '{model_size}' on GPU...")
+            model = whisper.load_model(model_size, device="cuda")
+            print(f"Whisper model '{model_size}' successfully loaded on GPU.")
+            return model
+        except RuntimeError as e:
+            if "CUDA out of memory" in str(e) or "not enough memory" in str(e).lower():
+                print(f"CUDA out of memory when loading Whisper model '{model_size}' on GPU. Falling back to CPU.")
+            else:
+                print(f"RuntimeError encountered when loading Whisper model '{model_size}' on GPU: {e}. Falling back to CPU.")
+        except Exception as e: # Catch any other unexpected errors during GPU load
+            print(f"An unexpected error occurred when trying to load Whisper model '{model_size}' on GPU: {e}. Falling back to CPU.")
+    else:
+        print("CUDA not available. Proceeding to load Whisper model on CPU.")
+
+    # Fallback to CPU if CUDA is not available or if GPU loading failed
+    print(f"Loading Whisper model '{model_size}' on CPU...")
+    model = whisper.load_model(model_size, device="cpu")
+    print(f"Whisper model '{model_size}' successfully loaded on CPU.")
+    return model
 
 def transcribe_audio(audio_bytes: bytes) -> str:
     """將音訊位元組轉換為文字"""

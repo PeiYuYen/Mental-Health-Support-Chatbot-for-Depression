@@ -54,10 +54,10 @@ def main():
 
         # Inject CSS to control iframe height for chat_input_widget
         st.markdown("""<style>
-iframe[title="streamlit_chat_widget.chat_input_widget"] {
-    height: 80px !important; /* You can adjust this value */
-}
-</style>""", unsafe_allow_html=True)
+        iframe[title="streamlit_chat_widget.chat_input_widget"] {
+            height: 80px !important; /* You can adjust this value */
+        }
+        </style>""", unsafe_allow_html=True)
 
         # Function for handling conversation with history
         def conversational_chat(query):
