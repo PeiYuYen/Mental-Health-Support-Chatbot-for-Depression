@@ -7,7 +7,7 @@ import whisper
 import tempfile
 import os
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import sqlite3
 import json
