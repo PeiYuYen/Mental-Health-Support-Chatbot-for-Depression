@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from streamlit_chat_widget import chat_input_widget
 from streamlit_extras.bottom_container import bottom
-from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection, transcribe_audio
+from utils import generate_suggestion, analyze_emotions, store_analysis, get_connection, transcribe_audio, retrieve_dialog, retrieve_support, make_unified_prompt, load_chat_history, log_chat_message, rerank_with_cross_encoder
 
 # os.environ["STREAMLIT_WATCHER_IGNORE_FILES"] = "torch"
 
@@ -37,6 +37,23 @@ def main():
 
     st.sidebar.title(f"👋 Welcome! **{username}**")
 
+    #if 有做user_data
+    user_history = []
+    # 1. 初始化 user_history 到 session_state
+    if "user_history" not in st.session_state:
+        st.session_state["user_history"] = []
+
+    # 2. 第一次进来，加载一次历史
+    if "history_loaded" not in st.session_state:
+        hist = load_chat_history(username)
+        for e in hist:
+            st.session_state["user_history"].append({
+                "role":    e["role"],
+                "type":    "text",
+                "content": e["content"]
+            })
+        st.session_state["history_loaded"] = True
+    
     # 初始化 session_state
     if "last_analysis" not in st.session_state:
         st.session_state.last_analysis = None
@@ -60,6 +77,8 @@ def main():
         </style>""", unsafe_allow_html=True)
 
         # Function for handling conversation with history
+
+        
         def conversational_chat(query):
             messages = [
                 {"role": "user" if entry["role"] == "user" else "assistant", "content": entry["content"]}
@@ -78,12 +97,58 @@ def main():
             st.session_state['waiting_for_response'] = None  # 清除等待狀態
             
             return response
+        
+        def conversational_chat_with_rag(query):
+    
+            # 1) 先把历史对话打包成 messages​'
+            print("user_history")
+            print(user_history)
+            combined = st.session_state["user_history"] + st.session_state["history"]
+            messages = [
+                {"role": "user" if e["role"]=="user" else "assistant",
+                "content": e["content"]}
+                for e in combined
+            ]
+            # 1) 歷史對話檢索
+            dlg_sim, dlg_entry = retrieve_dialog(query)
+            
+            # 2) 支持材料檢索
+            support_hits = retrieve_support(query)
+            #reranked = rerank_with_cross_encoder(query, support_hits)
+            
+            # 3) 統一構造 Prompt
+            prompt = make_unified_prompt(query, dlg_sim, dlg_entry, support_hits)
+            if prompt != None:
+                messages[-2]['content'] = f"{messages[-2]['content']}\n\n{prompt}"
+            print(messages)
+            response = llm.invoke(messages)
+            print(response)
+
+            prompt = f"""
+            你是一名助理。請判斷下面這句話是否包含使用者的重要個人經歷，需要被記錄下來以便後續參考。
+            請僅回答「是」或「否」，不要多餘文字。
+
+            句子："{query}"
+            """
+            resp = llm.invoke([{"role":"system","content":prompt}])
+            if resp.strip() == "是":
+                log_chat_message(username, "user", query)
+
+            # **更新對話歷史，但不會重複新增**
+            for i in range(len(st.session_state['history']) - 1, -1, -1):
+                if st.session_state['history'][i]["content"] == "⏳ ...":
+                    st.session_state['history'][i] = {"role": "assistant", "type": "text", "content": response}  # ✅ 更新 AI 回應
+                    break
+
+            st.session_state['waiting_for_response'] = None  # 清除等待狀態
+            return response
 
         # Initialize session state
         if 'history' not in st.session_state:
             st.session_state['history'] = []
         if 'waiting_for_response' not in st.session_state:
-            st.session_state['waiting_for_response'] = None  # 存放等待 AI 回應的訊息  
+            st.session_state['waiting_for_response'] = None  # 存放等待 AI 回應的訊息 
+ 
 
 
         message("哈囉! 歡迎你來到這裡。你可以在這裡放心地說你想說的任何事，要不要花點時間跟我聊聊呢?", avatar_style="thumbs")
@@ -104,8 +169,10 @@ def main():
             # **找到最後一筆 "⏳ ..." 並更新**
             for i in range(len(st.session_state['history']) - 1, -1, -1):
                 if st.session_state['history'][i]["content"] == "⏳ ...":
-                    response = conversational_chat(user_input_text)  # 取得 LLM 回應
+                    #response = conversational_chat(user_input_text)  # 取得 LLM 回應
+                    response = conversational_chat_with_rag(user_input_text)
                     st.session_state['history'][i] = {"role": "assistant", "type": "text", "content": response}  # **直接替換 bot 的回應**
+                    #log_chat_message(username, "assistant", response)
                     st.session_state['waiting_for_response'] = None  # 清除等待狀態
                     st.rerun()  # 🔄 重新渲染頁面，讓 AI 回應顯示
                     break
@@ -122,6 +189,7 @@ def main():
                 if "text" in user_input:
                     input_text = user_input["text"]
                     st.session_state['history'].append({"role": "user", "type": "text", "content": input_text})
+                    #log_chat_message(username, 'user', input_text)
                 
                 # 處理音訊輸入
                 elif "audioFile" in user_input:
@@ -130,6 +198,7 @@ def main():
                         input_text = transcribe_audio(audio_bytes)
                         if input_text:
                             st.session_state['history'].append({"role": "user", "type": "text", "content": f"{input_text}"})
+                            log_chat_message(username, 'user', input_text)
                         else:
                             st.error("音訊轉錄失敗，請重新嘗試")
                             return
